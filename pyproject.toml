@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shiplabel-lint"
+version = "0.1.0"
+description = "Streaming line-number linter for shipping label manifest CSVs"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "daniel-w315" }]
+
+[project.scripts]
+shiplabel-lint = "shiplabel_lint.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["shiplabel_lint*"]

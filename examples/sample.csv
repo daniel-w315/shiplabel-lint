@@ -1,0 +1,6 @@
+tracking_number,carrier,service_level,weight_oz,length_in,width_in,height_in,dest_postal,dest_country
+1Z999AA10123456784,ups,ground,32,12,9,4,60614,US
+,fedex,express,16,10,8,3,10001,US
+9400111899223344556677,usps,priority,48,14,10,6,94105,US
+1Z999AA10123456784,ups,ground,20,12,9,4,90210,US
+123,fedex,ground,0,10,10,10,00000,US
