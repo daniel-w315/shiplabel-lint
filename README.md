@@ -80,3 +80,9 @@ else iterable line by line) — it pulls one row at a time and never holds the
 rest of the file in memory.
 
 No third-party dependencies, standard library only.
+
+## Running the tests
+
+```
+$ python -m unittest discover -s tests
+```
