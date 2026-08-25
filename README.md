@@ -49,6 +49,14 @@ fail the check). Pass `-` or nothing to read from stdin:
 $ cat examples/sample.csv | python -m shiplabel_lint.cli
 ```
 
+Pass `--format json` to get a single JSON array of findings instead, for
+feeding into a CI step:
+
+```
+$ python -m shiplabel_lint.cli --format json examples/sample.csv
+[{"source": "examples/sample.csv", "line": 3, "code": "E010", "level": "error", "message": "missing tracking number"}, ...]
+```
+
 ## Checks
 
 | Code | Meaning |
