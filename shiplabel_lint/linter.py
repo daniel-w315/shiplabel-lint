@@ -30,6 +30,18 @@ CA_POSTAL = re.compile(r"^[A-Za-z]\d[A-Za-z] ?\d[A-Za-z]\d$")
 # a shipment needs to be split or booked as freight.
 MAX_WEIGHT_OZ = 2400
 
+# Industry-standard dimensional weight divisor for inches/pounds. Carriers
+# bill on the greater of actual weight and (L*W*H)/139, so a large, light
+# box (styrofoam, an empty-looking mailer) can cost more than its scale
+# weight suggests.
+DIM_WEIGHT_DIVISOR = 139
+
+# UPS/FedEx ground oversize thresholds: any single side over 108in, or
+# length + girth (the longest side plus twice the sum of the other two)
+# over 130in, gets billed as an oversize package regardless of weight.
+MAX_DIMENSION_IN = 108
+MAX_LENGTH_PLUS_GIRTH_IN = 130
+
 
 @dataclass
 class Finding:
@@ -108,6 +120,7 @@ def _lint_row(row, col_index, line_no, seen_tracking):
         else:
             seen_tracking.add(tracking)
 
+    weight = None
     if not weight_raw:
         yield Finding(line_no, "E020", "error", "missing weight")
     else:
@@ -128,11 +141,64 @@ def _lint_row(row, col_index, line_no, seen_tracking):
                     f"weight {weight}oz exceeds typical carrier limit of {MAX_WEIGHT_OZ}oz",
                 )
 
+    yield from _lint_dimensions(get, line_no, weight)
+
     if not postal:
         yield Finding(line_no, "E030", "error", "missing destination postal code")
     elif not _looks_like_postal(postal):
         yield Finding(
             line_no, "E031", "error", f"destination postal code '{postal}' does not look valid"
+        )
+
+
+def _lint_dimensions(get, line_no, weight):
+    """Check length_in/width_in/height_in, if the manifest has them.
+
+    These columns are optional, so a manifest without them (or a row that
+    leaves them all blank) is checked without this step. weight is the
+    already-parsed weight_oz for the row, or None if it was missing/invalid.
+    """
+    raw = (get("length_in"), get("width_in"), get("height_in"))
+    if not any(raw):
+        return
+    if not all(raw):
+        yield Finding(
+            line_no,
+            "E023",
+            "error",
+            "incomplete dimensions: length_in, width_in, and height_in must all be given together",
+        )
+        return
+
+    try:
+        length, width, height = (float(v) for v in raw)
+    except ValueError:
+        yield Finding(line_no, "E024", "error", "dimensions must be numbers")
+        return
+
+    if length <= 0 or width <= 0 or height <= 0:
+        yield Finding(line_no, "E025", "error", "dimensions must be greater than zero")
+        return
+
+    longest, mid, short = sorted((length, width, height), reverse=True)
+    length_plus_girth = longest + 2 * (mid + short)
+    if longest > MAX_DIMENSION_IN or length_plus_girth > MAX_LENGTH_PLUS_GIRTH_IN:
+        yield Finding(
+            line_no,
+            "W030",
+            "warning",
+            f"package is oversize (longest side {longest}in, length+girth "
+            f"{length_plus_girth}in exceeds carrier limits)",
+        )
+
+    dim_weight_oz = (length * width * height / DIM_WEIGHT_DIVISOR) * 16
+    if weight is not None and dim_weight_oz > weight:
+        yield Finding(
+            line_no,
+            "W031",
+            "warning",
+            f"dimensional weight ({dim_weight_oz:.1f}oz) exceeds actual weight "
+            f"({weight}oz) and may be used for billing instead",
         )
 
 
