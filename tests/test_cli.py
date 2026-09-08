@@ -103,6 +103,29 @@ class TestCli(unittest.TestCase):
         self.assertEqual(findings[0]["line"], 2)
         self.assertEqual(findings[0]["source"], "<stdin>")
 
+    def test_rules_file_replaces_builtin_carrier_patterns(self):
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".ini", delete=False
+        ) as f:
+            f.write("[carriers]\nontrac = ^[A-Z]\\d{7}$\n")
+            rules_path = f.name
+        csv_text = (
+            "tracking_number,carrier,weight_oz,dest_postal\n"
+            "C1234567,ontrac,32,60614\n"
+        )
+        try:
+            code, output = self._run(["--rules", rules_path], stdin_text=csv_text)
+            self.assertEqual(code, 0)
+            self.assertEqual(output, "")
+        finally:
+            os.unlink(rules_path)
+
+    def test_missing_rules_file_exits_two_with_message(self):
+        code, output = self._run(
+            ["--rules", "/no/such/rules.ini"], stdin_text=""
+        )
+        self.assertEqual(code, 2)
+
     def test_json_format_is_single_line_output(self):
         csv_text = (
             "tracking_number,carrier,weight_oz,dest_postal\n"

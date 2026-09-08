@@ -2,7 +2,7 @@ import argparse
 import json
 import sys
 
-from .linter import lint_stream
+from .linter import lint_stream, load_carrier_patterns
 
 
 def main(argv=None):
@@ -23,36 +23,51 @@ def main(argv=None):
         help="output format: 'text' for human-readable lines, 'json' for a single "
         "JSON array of findings (default: text)",
     )
+    parser.add_argument(
+        "--rules",
+        metavar="PATH",
+        help="path to an INI file with a [carriers] section mapping carrier "
+        "name to tracking number regex, replacing the built-in patterns",
+    )
     args = parser.parse_args(argv)
 
+    if args.rules:
+        try:
+            carrier_patterns = load_carrier_patterns(args.rules)
+        except (OSError, ValueError) as exc:
+            print(f"shiplabel-lint: {exc}", file=sys.stderr)
+            sys.exit(2)
+    else:
+        carrier_patterns = None
+
     if args.path == "-":
-        exit_code = _run(sys.stdin, "<stdin>", args.format)
+        exit_code = _run(sys.stdin, "<stdin>", args.format, carrier_patterns)
     else:
         with open(args.path, newline="") as f:
-            exit_code = _run(f, args.path, args.format)
+            exit_code = _run(f, args.path, args.format, carrier_patterns)
 
     sys.exit(exit_code)
 
 
-def _run(fileobj, source_name, output_format):
+def _run(fileobj, source_name, output_format, carrier_patterns):
     if output_format == "json":
-        return _run_json(fileobj, source_name)
-    return _run_text(fileobj, source_name)
+        return _run_json(fileobj, source_name, carrier_patterns)
+    return _run_text(fileobj, source_name, carrier_patterns)
 
 
-def _run_text(fileobj, source_name):
+def _run_text(fileobj, source_name, carrier_patterns):
     had_error = False
-    for finding in lint_stream(fileobj):
+    for finding in lint_stream(fileobj, carrier_patterns):
         print(f"{source_name}:{finding.line}: {finding.level}: {finding.code} {finding.message}")
         if finding.level == "error":
             had_error = True
     return 1 if had_error else 0
 
 
-def _run_json(fileobj, source_name):
+def _run_json(fileobj, source_name, carrier_patterns):
     had_error = False
     findings = []
-    for finding in lint_stream(fileobj):
+    for finding in lint_stream(fileobj, carrier_patterns):
         findings.append(
             {
                 "source": source_name,

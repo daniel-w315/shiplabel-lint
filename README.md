@@ -64,6 +64,29 @@ $ python -m shiplabel_lint.cli --format json examples/sample.csv
 [{"source": "examples/sample.csv", "line": 3, "code": "E010", "level": "error", "message": "missing tracking number"}, ...]
 ```
 
+## Custom carrier patterns
+
+The tracking number formats built into the tool (see `E011` below) are
+approximations, not the carriers' published specs, and they only cover
+`ups`, `fedex`, `usps`, and `dhl`. If your manifests use a regional carrier,
+or you need a tighter or looser pattern, pass `--rules` with an INI file
+that has a `[carriers]` section:
+
+```
+[carriers]
+ups = ^1Z[0-9A-Z]{16}$
+ontrac = ^[A-Z]\d{7}$
+```
+
+```
+$ python -m shiplabel_lint.cli --rules carrier-rules.ini examples/sample.csv
+```
+
+A rules file replaces the built-in patterns entirely rather than adding to
+them, so list every carrier you want validated, including the built-in
+ones you still want to keep. Carriers not listed still pass through the
+row (with a `W010` warning) instead of failing.
+
 ## Checks
 
 | Code | Meaning |

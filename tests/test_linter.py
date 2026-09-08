@@ -1,11 +1,13 @@
+import os
+import tempfile
 import unittest
 from io import StringIO
 
-from shiplabel_lint.linter import lint_stream
+from shiplabel_lint.linter import lint_stream, load_carrier_patterns
 
 
-def lint(text):
-    return list(lint_stream(StringIO(text)))
+def lint(text, carrier_patterns=None):
+    return list(lint_stream(StringIO(text), carrier_patterns))
 
 
 class TestLintStream(unittest.TestCase):
@@ -217,6 +219,56 @@ class TestLintStream(unittest.TestCase):
             "1Z999AA10123456784,ups,10,6,4,2,60614\n"
         )
         self.assertEqual(findings, [])
+
+
+class TestLoadCarrierPatterns(unittest.TestCase):
+    def _rules_file(self, text):
+        fd, path = tempfile.mkstemp(suffix=".ini")
+        with os.fdopen(fd, "w") as f:
+            f.write(text)
+        self.addCleanup(os.unlink, path)
+        return path
+
+    def test_loads_patterns_from_file(self):
+        path = self._rules_file("[carriers]\nontrac = ^[A-Z]\\d{7}$\n")
+        patterns = load_carrier_patterns(path)
+        self.assertEqual(set(patterns), {"ontrac"})
+        self.assertTrue(patterns["ontrac"].match("C1234567"))
+        self.assertFalse(patterns["ontrac"].match("1234567"))
+
+    def test_missing_section_raises(self):
+        path = self._rules_file("[other]\nfoo = bar\n")
+        with self.assertRaises(ValueError):
+            load_carrier_patterns(path)
+
+    def test_invalid_regex_raises(self):
+        path = self._rules_file("[carriers]\nups = [unclosed\n")
+        with self.assertRaises(ValueError):
+            load_carrier_patterns(path)
+
+    def test_missing_file_raises_oserror(self):
+        with self.assertRaises(OSError):
+            load_carrier_patterns("/no/such/rules.ini")
+
+    def test_custom_patterns_used_by_lint_stream(self):
+        path = self._rules_file("[carriers]\nontrac = ^[A-Z]\\d{7}$\n")
+        patterns = load_carrier_patterns(path)
+        findings = lint(
+            "tracking_number,carrier,weight_oz,dest_postal\n"
+            "C1234567,ontrac,32,60614\n",
+            carrier_patterns=patterns,
+        )
+        self.assertEqual(findings, [])
+
+    def test_custom_patterns_no_longer_recognize_builtin_carrier(self):
+        path = self._rules_file("[carriers]\nontrac = ^[A-Z]\\d{7}$\n")
+        patterns = load_carrier_patterns(path)
+        findings = lint(
+            "tracking_number,carrier,weight_oz,dest_postal\n"
+            "1Z999AA10123456784,ups,32,60614\n",
+            carrier_patterns=patterns,
+        )
+        self.assertEqual([f.code for f in findings], ["W010"])
 
 
 if __name__ == "__main__":

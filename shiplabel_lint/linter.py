@@ -6,6 +6,7 @@ Everything here reads the input a row at a time so a manifest with a few
 hundred thousand rows can be checked without holding the file in memory.
 """
 
+import configparser
 import csv
 import re
 from dataclasses import dataclass
@@ -51,13 +52,19 @@ class Finding:
     message: str
 
 
-def lint_stream(fileobj):
+def lint_stream(fileobj, carrier_patterns=None):
     """Yield Finding objects for a manifest, reading one row at a time.
 
     fileobj is any iterable of lines (an open file, sys.stdin, ...). Rows
     are never buffered into a list, so this is safe to run against input
     larger than available memory.
+
+    carrier_patterns, if given, replaces CARRIER_TRACKING_PATTERNS (see
+    load_carrier_patterns) so tracking number formats can be adjusted
+    without editing this module.
     """
+    if carrier_patterns is None:
+        carrier_patterns = CARRIER_TRACKING_PATTERNS
     reader = csv.reader(fileobj)
     try:
         header = next(reader)
@@ -80,10 +87,10 @@ def lint_stream(fileobj):
     for line_no, row in enumerate(reader, start=2):
         if not row or all(not cell.strip() for cell in row):
             continue
-        yield from _lint_row(row, col_index, line_no, seen_tracking)
+        yield from _lint_row(row, col_index, line_no, seen_tracking, carrier_patterns)
 
 
-def _lint_row(row, col_index, line_no, seen_tracking):
+def _lint_row(row, col_index, line_no, seen_tracking, carrier_patterns):
     def get(name):
         idx = col_index.get(name)
         if idx is None or idx >= len(row):
@@ -98,7 +105,7 @@ def _lint_row(row, col_index, line_no, seen_tracking):
     if not tracking:
         yield Finding(line_no, "E010", "error", "missing tracking number")
     else:
-        pattern = CARRIER_TRACKING_PATTERNS.get(carrier)
+        pattern = carrier_patterns.get(carrier)
         if pattern is None:
             yield Finding(
                 line_no,
@@ -204,3 +211,34 @@ def _lint_dimensions(get, line_no, weight):
 
 def _looks_like_postal(value):
     return bool(US_ZIP.match(value)) or bool(CA_POSTAL.match(value))
+
+
+def load_carrier_patterns(path):
+    """Load a carrier -> tracking number regex mapping from a rules file.
+
+    The file is an INI file with a single [carriers] section, e.g.:
+
+        [carriers]
+        ups = ^1Z[0-9A-Z]{16}$
+        ontrac = ^[A-Z]\\d{7}$
+
+    The returned dict replaces CARRIER_TRACKING_PATTERNS entirely rather
+    than merging with it, so a rules file is a full statement of which
+    carriers to validate and how.
+    """
+    parser = configparser.ConfigParser()
+    with open(path) as f:
+        parser.read_file(f)
+
+    if not parser.has_section("carriers"):
+        raise ValueError(f"{path}: missing [carriers] section")
+
+    patterns = {}
+    for carrier, raw_pattern in parser.items("carriers"):
+        try:
+            patterns[carrier] = re.compile(raw_pattern)
+        except re.error as exc:
+            raise ValueError(
+                f"{path}: invalid regex for carrier '{carrier}': {exc}"
+            ) from exc
+    return patterns
