@@ -29,6 +29,11 @@ def main(argv=None):
         help="path to an INI file with a [carriers] section mapping carrier "
         "name to tracking number regex, replacing the built-in patterns",
     )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="exit 1 if any warnings are found, not just errors",
+    )
     args = parser.parse_args(argv)
 
     if args.rules:
@@ -41,31 +46,31 @@ def main(argv=None):
         carrier_patterns = None
 
     if args.path == "-":
-        exit_code = _run(sys.stdin, "<stdin>", args.format, carrier_patterns)
+        exit_code = _run(sys.stdin, "<stdin>", args.format, carrier_patterns, args.strict)
     else:
         with open(args.path, newline="") as f:
-            exit_code = _run(f, args.path, args.format, carrier_patterns)
+            exit_code = _run(f, args.path, args.format, carrier_patterns, args.strict)
 
     sys.exit(exit_code)
 
 
-def _run(fileobj, source_name, output_format, carrier_patterns):
+def _run(fileobj, source_name, output_format, carrier_patterns, strict):
     if output_format == "json":
-        return _run_json(fileobj, source_name, carrier_patterns)
-    return _run_text(fileobj, source_name, carrier_patterns)
+        return _run_json(fileobj, source_name, carrier_patterns, strict)
+    return _run_text(fileobj, source_name, carrier_patterns, strict)
 
 
-def _run_text(fileobj, source_name, carrier_patterns):
-    had_error = False
+def _run_text(fileobj, source_name, carrier_patterns, strict):
+    should_fail = False
     for finding in lint_stream(fileobj, carrier_patterns):
         print(f"{source_name}:{finding.line}: {finding.level}: {finding.code} {finding.message}")
-        if finding.level == "error":
-            had_error = True
-    return 1 if had_error else 0
+        if finding.level == "error" or (strict and finding.level == "warning"):
+            should_fail = True
+    return 1 if should_fail else 0
 
 
-def _run_json(fileobj, source_name, carrier_patterns):
-    had_error = False
+def _run_json(fileobj, source_name, carrier_patterns, strict):
+    should_fail = False
     findings = []
     for finding in lint_stream(fileobj, carrier_patterns):
         findings.append(
@@ -77,10 +82,10 @@ def _run_json(fileobj, source_name, carrier_patterns):
                 "message": finding.message,
             }
         )
-        if finding.level == "error":
-            had_error = True
+        if finding.level == "error" or (strict and finding.level == "warning"):
+            should_fail = True
     print(json.dumps(findings))
-    return 1 if had_error else 0
+    return 1 if should_fail else 0
 
 
 if __name__ == "__main__":

@@ -50,7 +50,10 @@ examples/sample.csv:6: warning: W031 dimensional weight (115.1oz) exceeds actual
 ```
 
 Exit code is 1 if any errors were found, 0 otherwise (warnings alone don't
-fail the check). Pass `-` or nothing to read from stdin:
+fail the check). Pass `--strict` to treat warnings as failures too, useful
+in CI when you want oversize packages or unknown carriers caught before
+they reach a print run instead of just logged. Pass `-` or nothing to read
+from stdin:
 
 ```
 $ cat examples/sample.csv | python -m shiplabel_lint.cli

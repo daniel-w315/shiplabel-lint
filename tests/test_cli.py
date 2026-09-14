@@ -50,6 +50,24 @@ class TestCli(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("W020", output)
 
+    def test_strict_fails_on_warnings_alone(self):
+        csv_text = (
+            "tracking_number,carrier,weight_oz,dest_postal\n"
+            "1Z999AA10123456784,ups,3000,60614\n"
+        )
+        code, output = self._run(["--strict"], stdin_text=csv_text)
+        self.assertEqual(code, 1)
+        self.assertIn("W020", output)
+
+    def test_strict_still_exits_zero_with_no_findings(self):
+        csv_text = (
+            "tracking_number,carrier,weight_oz,dest_postal\n"
+            "1Z999AA10123456784,ups,32,60614\n"
+        )
+        code, output = self._run(["--strict"], stdin_text=csv_text)
+        self.assertEqual(code, 0)
+        self.assertEqual(output, "")
+
     def test_reads_from_file_path(self):
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".csv", delete=False, newline=""
