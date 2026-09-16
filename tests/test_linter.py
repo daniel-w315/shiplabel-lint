@@ -145,13 +145,32 @@ class TestLintStream(unittest.TestCase):
         )
         self.assertEqual(findings, [])
 
-    def test_short_row_treated_as_missing_trailing_fields(self):
+    def test_row_with_too_few_columns_is_flagged(self):
         findings = lint(
             "tracking_number,carrier,weight_oz,dest_postal\n1Z999AA10123456784,ups\n"
         )
-        codes = [f.code for f in findings]
-        self.assertIn("E020", codes)
-        self.assertIn("E030", codes)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].code, "E002")
+        self.assertEqual(findings[0].level, "error")
+        self.assertEqual(findings[0].line, 2)
+
+    def test_row_with_too_many_columns_is_flagged(self):
+        findings = lint(
+            "tracking_number,carrier,weight_oz,dest_postal\n"
+            "1Z999AA10123456784,ups,32,60614,extra\n"
+        )
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].code, "E002")
+
+    def test_malformed_row_does_not_block_later_rows(self):
+        findings = lint(
+            "tracking_number,carrier,weight_oz,dest_postal\n"
+            "1Z999AA10123456784,ups\n"
+            "1Z999AA10123456785,ups,32,60614\n"
+        )
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].code, "E002")
+        self.assertEqual(findings[0].line, 2)
 
     def test_manifest_without_dimension_columns_is_unaffected(self):
         findings = lint(

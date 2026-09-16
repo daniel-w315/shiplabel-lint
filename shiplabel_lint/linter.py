@@ -62,6 +62,12 @@ def lint_stream(fileobj, carrier_patterns=None):
     carrier_patterns, if given, replaces CARRIER_TRACKING_PATTERNS (see
     load_carrier_patterns) so tracking number formats can be adjusted
     without editing this module.
+
+    A row whose column count doesn't match the header (a truncated line, an
+    unescaped comma in an address field, ...) is reported as a single E002
+    finding rather than checked field by field, since misaligned columns
+    would otherwise produce misleading errors about whichever fields
+    happened to land in the wrong slots.
     """
     if carrier_patterns is None:
         carrier_patterns = CARRIER_TRACKING_PATTERNS
@@ -83,9 +89,18 @@ def lint_stream(fileobj, carrier_patterns=None):
         )
         return
 
+    expected_cols = len(header)
     seen_tracking = set()
     for line_no, row in enumerate(reader, start=2):
         if not row or all(not cell.strip() for cell in row):
+            continue
+        if len(row) != expected_cols:
+            yield Finding(
+                line_no,
+                "E002",
+                "error",
+                f"row has {len(row)} column(s), expected {expected_cols}",
+            )
             continue
         yield from _lint_row(row, col_index, line_no, seen_tracking, carrier_patterns)
 

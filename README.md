@@ -95,6 +95,7 @@ row (with a `W010` warning) instead of failing.
 | Code | Meaning |
 | --- | --- |
 | E001 | manifest is missing a required column |
+| E002 | row's column count doesn't match the header |
 | E010 | row has no tracking number |
 | E011 | tracking number doesn't match the expected format for its carrier |
 | E012 | tracking number appears more than once in the manifest |
